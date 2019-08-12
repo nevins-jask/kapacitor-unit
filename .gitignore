@@ -2,3 +2,4 @@ kapacitor-unit
 notes.md
 *.swp
 *.swo
+vendor/

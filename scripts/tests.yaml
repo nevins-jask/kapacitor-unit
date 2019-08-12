@@ -1,0 +1,81 @@
+# Test case for alert_weather.tick
+tests:
+  
+   # This is the configuration for a test case. The 'name' must be unique in the
+   # same test configuration. 'description' is optional
+
+  - name: "Under Replicated:: crit"
+    description: Task should trigger Crit when underreplicated over 0
+
+    # 'task_name' defines the name of the file of the tick script to be loaded
+    # when running the test
+    task_name: under_replicated.tick
+
+    db: kafka
+    rp: autogen 
+    type: stream
+
+    data_period: 1m
+    data_jitter: 5s
+     # 'data' is an array of data in the line protocol
+    data:
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=1
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=2
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=34
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=1
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=6
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=12
+
+    # Alert that should be triggered by Kapacitor when test data is running 
+    # against the task
+    expects:
+      ok: 0
+      warn: 0
+      crit: 1
+
+
+  - name: Should not resolve with 1 zero point
+    task_name: under_replicated.tick
+    db: kafka
+    rp: autogen 
+    type: stream
+    data_period: 1m
+    data_jitter: 10s
+    data:
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=34
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=34
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=34
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=34
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=34
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=34
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=0
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=34
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=34
+      
+    expects:
+      ok: 0
+      warn: 0
+      crit: 1
+
+  - name: Should resolve
+    task_name: under_replicated.tick
+    db: kafka
+    rp: autogen 
+    type: stream
+    data_period: 1m
+    data_jitter: 10s
+    data:
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=34
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=34
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=34
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=34
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=34
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=0
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=0
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=0
+      - ReplicaManager,region=us-west-2,name=UnderReplicatedPartitions,kafka_cluster=test Value=0
+      
+    expects:
+      ok: 1
+      warn: 0
+      crit: 1

@@ -2,17 +2,18 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/fatih/color"
 	"github.com/gpestana/kapacitor-unit/cli"
 	"github.com/gpestana/kapacitor-unit/io"
 	"github.com/gpestana/kapacitor-unit/task"
 	"github.com/gpestana/kapacitor-unit/test"
 	"gopkg.in/yaml.v2"
-	"io/ioutil"
-	"log"
-	"os"
-	"path/filepath"
-	"strings"
 )
 
 type TestCollection []test.Test

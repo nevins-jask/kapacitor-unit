@@ -1,0 +1,82 @@
+var db = 'kafka'
+
+var rp = 'autogen'
+
+var measurement = 'ReplicaManager'
+
+var groupBy = ['region', 'kafka_cluster']
+
+var whereFilter = lambda: ("name" == 'UnderReplicatedPartitions') AND ("region" == 'ca-central-1' OR "region" == 'eu-central-1' OR "region" == 'us-west-2')
+
+var name = 'Kafka-Under-Replicated-Partitions'
+
+var idVar = name + '-{{.Group}}'
+
+var message = 'Kafka under replicated partitions has been greater than 0 for last 5 minutes'
+
+var idTag = 'alertID'
+
+var levelTag = 'level'
+
+var messageField = 'message'
+
+var durationField = 'duration'
+
+var outputDB = 'chronograf'
+
+var outputRP = 'autogen'
+
+var outputMeasurement = 'alerts'
+
+var triggerType = 'threshold'
+
+var crit = 0
+
+var data = stream
+    |from()
+        .database(db)
+        .retentionPolicy(rp)
+        .measurement(measurement)
+        .groupBy(groupBy)
+        .where(whereFilter)
+    |window()
+        .period(1m)
+        .every(30s)
+        .align()
+    |max('Value')
+        .as('value')
+    |stateDuration(lambda: "value" > crit)
+        .unit(1m)
+        .as('bad')
+    |stateDuration(lambda: "value" == 0)
+        .unit(1m)
+        .as('clear')
+    |httpOut('mycustom_endpoint')
+
+
+var trigger = data
+    |alert()
+        .critReset(lambda: "clear" >= 1)
+        .crit(lambda: "bad" >= 4)
+        .stateChangesOnly()
+        .message(message)
+        .id(idVar)
+        .idTag(idTag)
+        .levelTag(levelTag)
+        .messageField(messageField)
+        .durationField(durationField)
+
+trigger
+    |eval(lambda: float("value"))
+        .as('value')
+        .keep()
+    |influxDBOut()
+        .create()
+        .database(outputDB)
+        .retentionPolicy(outputRP)
+        .measurement(outputMeasurement)
+        .tag('alertName', name)
+        .tag('triggerType', triggerType)
+
+trigger
+    |httpOut('output')

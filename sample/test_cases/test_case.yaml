@@ -7,6 +7,8 @@ tests:
     db: weather
     rp: default
     type: stream
+    data_period: 10s
+    data_jitter: 0s
     data:
       - temperature,location=us-midwest temperature=70
       - temperature,location=us-midwest temperature=120
@@ -22,6 +24,8 @@ tests:
     db: weather
     rp: default
     type: stream
+    data_period: 10s
+    data_jitter: 0s
     data:
       - temperature,location=us-midwest temperature=70
       - temperature,location=us-midwest temperature=82
@@ -36,6 +40,8 @@ tests:
     db: weather
     rp: default
     type: stream
+    data_period: 10s
+    data_jitter: 0s
     data:
       - temperature,location=us-midwest temperature=70
       - temperature,location=us-midwest temperature=82

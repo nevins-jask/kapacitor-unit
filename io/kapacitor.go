@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"github.com/golang/glog"
+	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strings"
 	"regexp"
+	"strings"
+
+	"github.com/golang/glog"
 )
 
 type Status struct {
@@ -30,7 +32,7 @@ func NewKapacitor(host string) Kapacitor {
 
 // Loads a task
 func (k Kapacitor) Load(f map[string]interface{}) error {
-	glog.Info("DEBUG:: Kapacitor loading task: ", f["id"])
+	glog.Infof("DEBUG:: Kapacitor loading task: %s", f["id"])
 	// Replaces '.every()' if type of script is batch
 	if f["type"] == "batch" {
 		str, ok := f["script"].(string)
@@ -39,30 +41,31 @@ func (k Kapacitor) Load(f map[string]interface{}) error {
 		}
 		f["script"] = batchReplaceEvery(str)
 
-		glog.Info("DEBUG:: batch script after replace: ", f["script"])
+		glog.Infof("DEBUG:: batch script after replace: %s", f["script"])
 	}
 
 	j, err := json.Marshal(f)
 	if err != nil {
 		return err
 	}
-	
-	u := k.Host + tasks
+
+	u := fmt.Sprintf("%s%s", k.Host, tasks)
 	res, err := k.Client.Post(u, "application/json", bytes.NewBuffer(j))
 	if err != nil {
 		return err
 	}
+	defer res.Body.Close()
 
-	if res.StatusCode != 200 {
+	if res.StatusCode != http.StatusOK {
 		r, _ := ioutil.ReadAll(res.Body)
-		return errors.New(res.Status + ":: " + string(r))
+		return fmt.Errorf("%s::%s", res.Status, string(r))
 	}
 	return nil
 }
 
 // Deletes a task
 func (k Kapacitor) Delete(id string) error {
-	u := k.Host + tasks + "/" + id
+	u := fmt.Sprintf("%s%s/%s", k.Host, tasks, id)
 	r, err := http.NewRequest("DELETE", u, nil)
 	if err != nil {
 		return err
@@ -71,32 +74,33 @@ func (k Kapacitor) Delete(id string) error {
 	if err != nil {
 		return err
 	}
-	glog.Info("DEBUG:: Kapacitor deleted task: ", id)
+	glog.Infof("DEBUG:: Kapacitor deleted task: %s", id)
 	return nil
 }
 
 // Adds test data to kapacitor
-func (k Kapacitor) Data(data []string, db string, rp string) error {
-	u := k.Host + kapacitor_write + "db=" + db + "&rp=" + rp
+func (k Kapacitor) Data(data [][]byte, db string, rp string) error {
+	u := fmt.Sprintf("%s%sdb=%s&rp=%s", k.Host, kapacitor_write, db, rp)
 	for _, d := range data {
 		_, err := k.Client.Post(u, "application/x-www-form-urlencoded",
-			bytes.NewBuffer([]byte(d)))
+			bytes.NewBuffer(d))
 		if err != nil {
 			return err
 		}
-		glog.Info("DEBUG:: Kapacitor added data: ", d)
+		glog.Infof("DEBUG:: Kapacitor added data: %s", d)
 	}
 	return nil
 }
 
 // Gets task alert status
 func (k Kapacitor) Status(id string) (map[string]int, error) {
-	glog.Info("DEBUG:: Kapacitor fetching status of: ", id)
-	u := k.Host + tasks + "/" + id
+	glog.Infof("DEBUG:: Kapacitor fetching status of: %s", id)
+	u := fmt.Sprintf("%s%s/%s", k.Host, tasks, id)
 	res, err := k.Client.Get(u)
 	if err != nil {
 		return nil, err
 	}
+	defer res.Body.Close()
 	var s Status
 	b, err := ioutil.ReadAll(res.Body)
 	err = json.Unmarshal(b, &s)

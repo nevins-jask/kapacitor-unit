@@ -1,27 +1,18 @@
 
 var weather = batch
-	| query('''
-		SELECT mean(temperature)
-		FROM "weather"."default"."temperature"
-		''')
-			.period(5m)
-			.every(10m)
-
-var rain = batch
-	| query('''
-		SELECT count(rain) 
-		FROM "weather"."default"."temperature"
-	''')
+	| query('SELECT mean(temperature) FROM "weather"."default".temperature')
 		.period(5m)
-		.every(3d)
-
+		.every(10m)
+		.align()
+		.fill(0)
 
 // simple case with only one batch query
 
-	weather
+weather
+	 |httpOut('temperature.mean')
 	| alert().id('Temperature')
 		.message('Temperature alert - batch')
-		.warn(lambda: "mean" > 80)
-		.crit(lambda: "mean" > 100)
+		.warn(lambda: "temperature.mean" > 80)
+		.crit(lambda: "temperature.mean" > 100)
 		.stateChangesOnly()
     .log('/tmp/temperature_batch.tick.log')

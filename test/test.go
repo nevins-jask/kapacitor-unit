@@ -4,25 +4,37 @@
 package test
 
 import (
+	crypto_rand "crypto/rand"
+	"encoding/binary"
 	"fmt"
+	"log"
+	"math/rand"
+	math_rand "math/rand"
+	"regexp"
+	"time"
+
 	"github.com/golang/glog"
 	"github.com/gpestana/kapacitor-unit/io"
 	"github.com/gpestana/kapacitor-unit/task"
-	"time"
-	"regexp"
+	"github.com/influxdata/telegraf"
+	parser "github.com/influxdata/telegraf/plugins/parsers/influx"
+	serializer "github.com/influxdata/telegraf/plugins/serializers/influx"
 )
 
 type Test struct {
-	Name     string
-	TaskName string `yaml:"task_name,omitempty"`
-	Data     []string
-	RecId    string `yaml:"recording_id"`
-	Expects  Result
-	Result   Result
-	Db       string
-	Rp       string
-	Type     string
-	Task     task.Task
+	Name       string
+	TaskName   string        `yaml:"task_name,omitempty"`
+	DataPeriod time.Duration `yaml:"data_period"`
+	DataJitter time.Duration `yaml:"data_jitter"`
+	Data       []string
+	metrics    []telegraf.Metric
+	RecID      string `yaml:"recording_id"`
+	Expects    Result
+	Result     Result
+	Db         string
+	Rp         string
+	Type       string
+	Task       task.Task
 }
 
 func NewTest() Test {
@@ -40,16 +52,77 @@ func (t *Test) Run(k io.Kapacitor, i io.Influxdb) error {
 	if err != nil {
 		return err
 	}
+	defer t.teardown(k, i)
+	err = t.parseData()
+	if err != nil {
+		return err
+	}
 	err = t.addData(k, i)
 	if err != nil {
 		return err
 	}
-	t.wait()
-	err = t.results(k)
-	if err != nil {
-		return err
-	}
+<<<<<<< HEAD
 
+=======
+	t.wait()
+	return t.results(k)
+}
+
+type Counter struct {
+	end    time.Time
+	step   time.Duration
+	jitter time.Duration
+	index  int
+	total  int
+}
+
+func (c *Counter) increment() time.Time {
+	i := int64(c.total-c.index) * c.step.Nanoseconds() * -1
+	d := c.end.Add(time.Duration(i))
+	// Add (or subtract) random jitter
+	if c.jitter != time.Duration(0) {
+		j := rand.Int63n(c.jitter.Nanoseconds())
+		if rand.Intn(2) == 1 {
+			j = -1 * j
+		}
+		d = d.Add(time.Duration(j))
+	}
+	c.index++
+	return d
+}
+
+func (t *Test) parseData() error {
+	if t.DataPeriod < t.DataJitter {
+		return fmt.Errorf("data period should be greater than jitter")
+	}
+	handler := parser.NewMetricHandler()
+	handler.SetTimePrecision(time.Nanosecond)
+	var b [8]byte
+	_, err := crypto_rand.Read(b[:])
+	if err != nil {
+		panic("cannot seed math/rand package with cryptographically secure random number generator")
+	}
+	math_rand.Seed(int64(binary.LittleEndian.Uint64(b[:])))
+	c := &Counter{
+		end:    time.Now(),
+		index:  0,
+		total:  len(t.Data),
+		step:   t.DataPeriod,
+		jitter: t.DataJitter,
+	}
+	handler.SetTimeFunc(c.increment)
+	p := parser.NewParser(handler)
+	t.metrics = make([]telegraf.Metric, len(t.Data))
+	for i, d := range t.Data {
+		m, err := p.ParseLine(d)
+		if err != nil {
+			return err
+		}
+		value, _ := m.GetField("temperature")
+		log.Printf("%v %v", m.Time(), value)
+		t.metrics[i] = m
+	}
+>>>>>>> add things
 	return nil
 }
 
@@ -63,16 +136,25 @@ func (t Test) String() string {
 
 // Adds test data
 func (t *Test) addData(k io.Kapacitor, i io.Influxdb) error {
+	s := serializer.NewSerializer()
+	data := make([][]byte, len(t.metrics))
+	for i, m := range t.metrics {
+		d, err := s.Serialize(m)
+		if err != nil {
+			return err
+		}
+		data[i] = d
+	}
 	switch t.Type {
 	case "stream":
 		// adds data to kapacitor
-		err := k.Data(t.Data, t.Db, t.Rp)
+		err := k.Data(data, t.Db, t.Rp)
 		if err != nil {
 			return err
 		}
 	case "batch":
 		// adds data to InfluxDb
-		err := i.Data(t.Data, t.Db, t.Rp)
+		err := i.Data(data, t.Db, t.Rp)
 		if err != nil {
 			return err
 		}
@@ -82,8 +164,8 @@ func (t *Test) addData(k io.Kapacitor, i io.Influxdb) error {
 
 // Validates if individual test configuration is correct
 func (t *Test) Validate() error {
-	glog.Info("DEBUG:: validate test: ", t.Name)
-	if len(t.Data) > 0 && t.RecId != "" {
+	glog.Infof("DEBUG:: validate test: %s", t.Name)
+	if len(t.Data) > 0 && t.RecID != "" {
 		m := "Configuration file cannot define a recording_id and line protocol data input for the same test case"
 		r := Result{0, 0, 0, m, false, true}
 		t.Result = r
@@ -94,13 +176,6 @@ func (t *Test) Validate() error {
 // Creates all necessary artifacts in database to run the test
 func (t *Test) setup(k io.Kapacitor, i io.Influxdb) error {
 	glog.Info("DEBUG:: setup test: ", t.Name)
-	switch t.Type {
-	case "batch":
-		err := i.Setup(t.Db, t.Rp)
-		if err != nil {
-			return err
-		}
-	}
 
 	// Loads test task to kapacitor
 	f := map[string]interface{}{
@@ -110,14 +185,19 @@ func (t *Test) setup(k io.Kapacitor, i io.Influxdb) error {
 		"status": "enabled",
 	}
 
-	dbrp, _ := regexp.MatchString(`(?m:^dbrp \"\w+\"\.\"\w+\"$)`, t.Task.Script)
-	if !dbrp {
+	if dbrp, _ := regexp.MatchString(`(?m:^dbrp \"\w+\"\.\"\w+\"$)`, t.Task.Script); !dbrp {
 		f["dbrps"] = []map[string]string{{"db": t.Db, "rp": t.Rp}}
 	}
 
-	err := k.Load(f)
-	if err != nil {
+	if err := k.Load(f); err != nil {
 		return err
+	}
+
+	switch t.Type {
+	case "batch":
+		if err := i.Setup(t.Db, t.Rp); err != nil {
+			return err
+		}
 	}
 	return nil
 }

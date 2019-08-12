@@ -3,7 +3,7 @@ package task
 
 import (
 	"io/ioutil"
-	"strings"
+	"path"
 )
 
 // FS configurations, namely path where TICKscripts are located
@@ -17,13 +17,11 @@ type Task struct {
 func New(n string, p string) (*Task, error) {
 	task := Task{
 		Name: n,
-		Path: p}
-
-	if !strings.HasSuffix(p, "/") {
-		p = p + "/"
+		Path: p,
 	}
 
-	s, err := ioutil.ReadFile(p + n)
+	scriptPath := path.Join(p, n)
+	s, err := ioutil.ReadFile(scriptPath)
 	if err != nil {
 		return nil, err
 	}
