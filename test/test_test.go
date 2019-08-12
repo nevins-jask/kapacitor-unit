@@ -10,7 +10,7 @@ func TestValidateRecAndData(t *testing.T) {
 	tst := Test{}
 
 	tst.Data = d
-	tst.RecId = "e24db07d-1646-4bb3-a445-828f5049bea0"
+	tst.RecID = "e24db07d-1646-4bb3-a445-828f5049bea0"
 	tst.Result = r
 
 	tst.Validate()
@@ -24,7 +24,7 @@ func TestValidateRecOk(t *testing.T) {
 	r := Result{}
 	tst := Test{}
 
-	tst.RecId = "e24db07d-1646-4bb3-a445-828f5049bea0"
+	tst.RecID = "e24db07d-1646-4bb3-a445-828f5049bea0"
 	tst.Result = r
 
 	tst.Validate()
@@ -54,7 +54,7 @@ func TestValidateRecNotOk(t *testing.T) {
 
 	tst.Data = []string{"data1"}
 	tst.Result = Result{}
-	tst.RecId = "some_id"
+	tst.RecID = "some_id"
 
 	tst.Validate()
 

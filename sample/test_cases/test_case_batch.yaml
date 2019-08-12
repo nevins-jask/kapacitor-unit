@@ -7,18 +7,10 @@ tests:
     rp: default
     type: batch
     data_period: 1m
-    data_jitter: 0s
+    data_jitter: 5s
     data:
+      - temperature,location=us-midwest temperature=90
       - temperature,location=us-midwest temperature=110
-      - temperature,location=us-midwest temperature=100
-      - temperature,location=us-midwest temperature=100
-      - temperature,location=us-midwest temperature=100
-      - temperature,location=us-midwest temperature=100
-      - temperature,location=us-midwest temperature=100
-      - temperature,location=us-midwest temperature=100
-      - temperature,location=us-midwest temperature=100
-      - temperature,location=us-midwest temperature=100
-      - temperature,location=us-midwest temperature=100
     expects:
       ok: 0
       warn: 0

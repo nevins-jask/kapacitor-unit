@@ -35,6 +35,8 @@ type Test struct {
 	Rp         string
 	Type       string
 	Task       task.Task
+	influx     io.Influxdb
+	kapacitor  io.Kapacitor
 }
 
 func NewTest() Test {
@@ -45,24 +47,25 @@ func NewTest() Test {
 // fetches the triggered alerts and saves it. It also removes all artifacts
 // (database, retention policy) created for the test.
 func (t *Test) Run(k io.Kapacitor, i io.Influxdb) error {
+	t.influx = i
+	t.kapacitor = k
+	defer t.teardown() //defer teardown so it gets run incase of early termination
 
-	defer t.teardown(k, i) //defer teardown so it gets run incase of early termination
-
-	err := t.setup(k, i)
+	err := t.setup()
 	if err != nil {
 		return err
 	}
-	defer t.teardown(k, i)
+	defer t.teardown()
 	err = t.parseData()
 	if err != nil {
 		return err
 	}
-	err = t.addData(k, i)
+	err = t.addData()
 	if err != nil {
 		return err
 	}
 	t.wait()
-	return t.results(k)
+	return t.results()
 }
 
 type Counter struct {
@@ -125,13 +128,12 @@ func (t *Test) parseData() error {
 func (t Test) String() string {
 	if t.Result.Error == true {
 		return fmt.Sprintf("TEST %v (%v) ERROR: %v", t.Name, t.TaskName, t.Result.String())
-	} else {
-		return fmt.Sprintf("TEST %v (%v) %v", t.Name, t.TaskName, t.Result.String())
 	}
+	return fmt.Sprintf("TEST %v (%v) %v", t.Name, t.TaskName, t.Result.String())
 }
 
 // Adds test data
-func (t *Test) addData(k io.Kapacitor, i io.Influxdb) error {
+func (t *Test) addData() error {
 	s := serializer.NewSerializer()
 	data := make([][]byte, len(t.metrics))
 	for i, m := range t.metrics {
@@ -144,13 +146,13 @@ func (t *Test) addData(k io.Kapacitor, i io.Influxdb) error {
 	switch t.Type {
 	case "stream":
 		// adds data to kapacitor
-		err := k.Data(data, t.Db, t.Rp)
+		err := t.kapacitor.Data(data, t.Db, t.Rp)
 		if err != nil {
 			return err
 		}
 	case "batch":
 		// adds data to InfluxDb
-		err := i.Data(data, t.Db, t.Rp)
+		err := t.influx.Data(data, t.Db, t.Rp)
 		if err != nil {
 			return err
 		}
@@ -170,7 +172,7 @@ func (t *Test) Validate() error {
 }
 
 // Creates all necessary artifacts in database to run the test
-func (t *Test) setup(k io.Kapacitor, i io.Influxdb) error {
+func (t *Test) setup() error {
 	glog.Info("DEBUG:: setup test: ", t.Name)
 
 	// Loads test task to kapacitor
@@ -185,13 +187,13 @@ func (t *Test) setup(k io.Kapacitor, i io.Influxdb) error {
 		f["dbrps"] = []map[string]string{{"db": t.Db, "rp": t.Rp}}
 	}
 
-	if err := k.Load(f); err != nil {
+	if err := t.kapacitor.Load(f); err != nil {
 		return err
 	}
 
 	switch t.Type {
 	case "batch":
-		if err := i.Setup(t.Db, t.Rp); err != nil {
+		if err := t.influx.Setup(t.Db, t.Rp); err != nil {
 			return err
 		}
 	}
@@ -208,16 +210,16 @@ func (t *Test) wait() {
 }
 
 // Deletes data, database and retention policies created to run the test
-func (t *Test) teardown(k io.Kapacitor, i io.Influxdb) {
+func (t *Test) teardown() {
 	glog.Info("DEBUG:: teardown test: ", t.Name)
 	switch t.Type {
 	case "batch":
-		err := i.CleanUp(t.Db)
+		err := t.influx.CleanUp(t.Db)
 		if err != nil {
 			glog.Error("Error performing teardown in cleanup. error: ", err)
 		}
 	}
-	err := k.Delete(t.TaskName)
+	err := t.kapacitor.Delete(t.TaskName)
 	if err != nil {
 		glog.Error("Error performing teardown in delete error: ", err)
 	}
@@ -226,8 +228,8 @@ func (t *Test) teardown(k io.Kapacitor, i io.Influxdb) {
 
 // Fetches status of kapacitor task, stores it and compares expected test result
 // and actual result test
-func (t *Test) results(k io.Kapacitor) error {
-	s, err := k.Status(t.Task.Name)
+func (t *Test) results() error {
+	s, err := t.kapacitor.Status(t.Task.Name)
 	if err != nil {
 		return err
 	}
