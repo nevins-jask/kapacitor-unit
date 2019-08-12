@@ -61,9 +61,6 @@ func (t *Test) Run(k io.Kapacitor, i io.Influxdb) error {
 	if err != nil {
 		return err
 	}
-<<<<<<< HEAD
-
-=======
 	t.wait()
 	return t.results(k)
 }
@@ -122,7 +119,6 @@ func (t *Test) parseData() error {
 		log.Printf("%v %v", m.Time(), value)
 		t.metrics[i] = m
 	}
->>>>>>> add things
 	return nil
 }
 
