@@ -7,7 +7,6 @@ import (
 	crypto_rand "crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"math/rand"
 	math_rand "math/rand"
 	"regexp"
@@ -104,7 +103,7 @@ func (t *Test) parseData() error {
 	}
 	math_rand.Seed(int64(binary.LittleEndian.Uint64(b[:])))
 	c := &Counter{
-		end:    time.Now(),
+		end:    time.Now().Add(-1 * time.Minute),
 		index:  0,
 		total:  len(t.Data),
 		step:   t.DataPeriod,
@@ -118,8 +117,6 @@ func (t *Test) parseData() error {
 		if err != nil {
 			return err
 		}
-		value, _ := m.GetField("temperature")
-		log.Printf("%v %v", m.Time(), value)
 		t.metrics[i] = m
 	}
 	return nil

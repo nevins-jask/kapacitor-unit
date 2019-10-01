@@ -48,7 +48,9 @@ func main() {
 		// Runs test
 		err = t.Run(kapacitor, influxdb)
 		if err != nil {
+			color.Set(color.FgRed)
 			log.Println("Error running test: ", t, " Error: ", err)
+			color.Unset()
 			continue
 		}
 		//Prints test output
@@ -103,6 +105,7 @@ func testConfig(fileName string) (TestCollection, error) {
 	if stat.IsDir() {
 		filepath.Walk(fileName, func(path string, info os.FileInfo, err error) error {
 			if ext := filepath.Ext(path); ext == ".yml" || ext == ".yaml" {
+				log.Printf("Loaded test case: %s", path)
 				files = append(files, path)
 			}
 			return nil
